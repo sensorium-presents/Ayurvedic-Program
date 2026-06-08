@@ -1,0 +1,31 @@
+# netlify.toml
+# Save this file as: netlify.toml in your GitHub repo root
+
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/dashboard.html"
+  status = 200
+
+[[redirects]]
+  from = "/login"
+  to = "/login.html"
+  status = 200
+
+[[redirects]]
+  from = "/quiz"
+  to = "/index.html"
+  status = 200
+
+# Protect dashboard - redirect to login if not authenticated
+# (actual auth check happens in dashboard.html JS)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  conditions = {Role = ["authenticated"]}
+
+[build.environment]
+  NODE_VERSION = "18"
