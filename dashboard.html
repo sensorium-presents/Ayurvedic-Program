@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OJAS · Your Program</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap');
+:root{
+  --fire:#E8921A;--gold:#D4A843;--sage:#3D9B6A;
+  --bloom:#4BBF85;--pollen:#EDB830;--cool:#5A96B8;
+  --cream:#F2EDD5;--ink:#060D08;--muted:#8AAF90;
+  --leaf:#2D7A4A;--root:#0D1F10;--vata:#7BA7C4;
+  --border:rgba(90,160,90,.12);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--ink);color:var(--cream);}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 0%,rgba(61,155,106,.18) 0%,transparent 55%),
+    radial-gradient(ellipse 60% 50% at 85% 15%,rgba(232,146,26,.12) 0%,transparent 50%),
+    radial-gradient(ellipse 50% 40% at 50% 100%,rgba(123,167,196,.1) 0%,transparent 55%);}
+
+/* Auth loading screen */
+.auth-gate{
+  position:fixed;inset:0;z-index:999;background:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+}
+.auth-gate .logo{font-family:'Playfair Display',serif;font-size:2.5rem;
+  font-weight:700;color:var(--pollen);letter-spacing:.25em;}
+.auth-gate .tagline{font-size:.6rem;letter-spacing:.35em;color:var(--bloom);
+  text-transform:uppercase;font-weight:300;}
+.auth-gate .loader{width:40px;height:40px;border:2px solid rgba(61,155,106,.2);
+  border-top-color:var(--bloom);border-radius:50%;animation:spin .8s linear infinite;margin-top:10px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Top bar */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,13,8,.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 24px;
+}
+.topbar-logo{font-family:'Playfair Display',serif;font-size:1rem;
+  font-weight:700;color:var(--pollen);letter-spacing:.2em;}
+.topbar-user{display:flex;align-items:center;gap:14px;}
+.user-greeting{font-size:.68rem;color:var(--muted);}
+.user-greeting strong{color:var(--cream);}
+.sync-indicator{
+  display:flex;align-items:center;gap:5px;font-size:.58rem;
+  color:var(--bloom);letter-spacing:.1em;opacity:0;transition:opacity .3s;
+}
+.sync-indicator.show{opacity:1;}
+.sync-dot{width:5px;height:5px;border-radius:50%;background:var(--bloom);
+  animation:pulse-dot 1.5s ease-in-out infinite;}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+.signout-btn{
+  padding:6px 14px;border:1px solid rgba(61,155,106,.2);background:transparent;
+  color:var(--muted);font-size:.6rem;letter-spacing:.12em;cursor:pointer;
+  font-family:'DM Sans',sans-serif;transition:all .15s;
+}
+.signout-btn:hover{border-color:var(--bloom);color:var(--cream);}
+
+/* Dosha header */
+.dosha-header{
+  padding:28px 24px 20px;
+  border-bottom:1px solid var(--border);
+  position:relative;z-index:1;
+}
+.dh-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:24px;flex-wrap:wrap;}
+.dosha-badge{padding:10px 20px;display:flex;flex-direction:column;
+  align-items:center;min-width:90px;}
+.dosha-badge.primary{
+  background:radial-gradient(ellipse at top,rgba(232,146,26,.12),transparent);
+  border:1px solid rgba(232,146,26,.25);}
+.dosha-badge.secondary{
+  background:radial-gradient(ellipse at top,rgba(61,155,106,.1),transparent);
+  border:1px solid rgba(61,155,106,.2);}
+.dosha-badge.tertiary{
+  background:radial-gradient(ellipse at top,rgba(123,167,196,.08),transparent);
+  border:1px solid rgba(123,167,196,.18);}
+.db-pct{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:400;}
+.primary .db-pct{color:var(--fire);}
+.secondary .db-pct{color:var(--bloom);}
+.tertiary .db-pct{color:var(--vata);}
+.db-name{font-size:.55rem;letter-spacing:.2em;text-transform:uppercase;color:var(--cream);}
+.db-role{font-size:.52rem;color:var(--muted);}
+.dh-info{flex:1;min-width:200px;}
+.dh-info h2{font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:400;
+  color:var(--cream);margin-bottom:3px;}
+.dh-info p{font-size:.7rem;color:var(--muted);line-height:1.7;font-weight:300;}
+.dh-progress{min-width:160px;}
+.prog-label{font-size:.58rem;color:var(--muted);letter-spacing:.1em;margin-bottom:6px;display:flex;justify-content:space-between;}
+.prog-label span{color:var(--bloom);}
+.prog-track{height:4px;background:rgba(255,255,255,.06);overflow:hidden;}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--leaf),var(--bloom),var(--pollen));transition:width .5s;}
+.prog-days{font-size:.62rem;color:var(--muted);margin-top:6px;text-align:right;}
+.prog-days strong{color:var(--cream);}
+
+/* Main content wrapper */
+.main-content{
+  position:relative;z-index:1;
+  max-width:980px;margin:0 auto;padding:28px 24px 80px;
+}
+
+/* Section with the program iframe/embed */
+.program-notice{
+  padding:24px;border:1px solid var(--border);
+  background:rgba(10,26,14,.4);margin-bottom:24px;
+  display:flex;align-items:flex-start;gap:14px;
+}
+.pn-icon{font-size:1.4rem;flex-shrink:0;margin-top:2px;}
+.pn-text h4{font-family:'Playfair Display',serif;font-size:.96rem;color:var(--cream);
+  font-weight:400;margin-bottom:4px;}
+.pn-text p{font-size:.71rem;color:var(--muted);line-height:1.7;font-weight:300;}
+
+/* Quick stats */
+.quick-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px;}
+.stat-card{padding:16px;border:1px solid var(--border);background:rgba(10,26,14,.4);text-align:center;}
+.stat-card .sv{font-family:'Playfair Display',serif;font-size:1.6rem;color:var(--pollen);display:block;}
+.stat-card .sl{font-size:.56rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;}
+
+/* Program launch button */
+.launch-program{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;
+  padding:22px 24px;border:1px solid rgba(75,191,133,.2);
+  background:linear-gradient(135deg,rgba(10,26,14,.9),rgba(20,50,28,.7));
+  margin-bottom:24px;
+}
+.lp-text h3{font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:400;
+  color:var(--cream);margin-bottom:4px;}
+.lp-text p{font-size:.7rem;color:var(--muted);font-weight:300;}
+.launch-btn{
+  padding:12px 28px;background:linear-gradient(135deg,var(--leaf),var(--bloom));
+  color:var(--cream);border:none;font-family:'DM Sans',sans-serif;
+  font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;
+  transition:all .2s;white-space:nowrap;
+}
+.launch-btn:hover{background:linear-gradient(135deg,var(--bloom),var(--pollen));
+  box-shadow:0 6px 24px rgba(75,191,133,.3);}
+
+/* Recent activity */
+.section-label{
+  font-size:.57rem;letter-spacing:.3em;color:var(--bloom);text-transform:uppercase;
+  display:flex;align-items:center;gap:8px;margin-bottom:12px;
+}
+.section-label::after{content:'';flex:1;height:1px;background:rgba(75,191,133,.12);}
+
+.activity-list{display:flex;flex-direction:column;gap:8px;}
+.activity-item{
+  display:flex;align-items:center;gap:12px;padding:11px 14px;
+  border:1px solid var(--border);background:rgba(10,26,14,.3);
+}
+.ai-icon{font-size:1rem;flex-shrink:0;}
+.ai-text{flex:1;}
+.ai-text strong{font-size:.75rem;color:var(--cream);display:block;}
+.ai-text span{font-size:.63rem;color:var(--muted);}
+.ai-date{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--muted);}
+
+/* Retake quiz / new program */
+.action-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:24px;}
+.action-card{
+  padding:18px;border:1px solid var(--border);background:rgba(10,26,14,.4);cursor:pointer;
+  transition:all .2s;text-decoration:none;display:block;
+}
+.action-card:hover{border-color:rgba(75,191,133,.3);background:rgba(20,50,28,.5);}
+.action-card h4{font-family:'Playfair Display',serif;font-size:.9rem;color:var(--bloom);
+  font-weight:400;margin-bottom:4px;}
+.action-card p{font-size:.68rem;color:var(--muted);line-height:1.6;font-weight:300;}
+
+@media(max-width:600px){
+  .dh-inner{gap:16px;}
+  .action-cards{grid-template-columns:1fr;}
+  .launch-program{flex-direction:column;}
+  .quick-stats{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+</head>
+<body>
+
+<!-- Auth gate — shown while checking session -->
+<div class="auth-gate" id="auth-gate">
+  <div class="logo">OJAS</div>
+  <div class="tagline">Discover your tridoshic nature</div>
+  <div class="loader"></div>
+</div>
+
+<!-- Main dashboard — hidden until auth confirmed -->
+<div id="dashboard-content" style="display:none;">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-logo">🌿 OJAS</div>
+    <div class="topbar-user">
+      <div class="sync-indicator" id="sync-indicator">
+        <span class="sync-dot"></span> Saving...
+      </div>
+      <div class="user-greeting">Welcome back, <strong id="user-name">—</strong></div>
+      <button class="signout-btn" onclick="signOut()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- Dosha constitution header -->
+  <div class="dosha-header">
+    <div class="dh-inner">
+      <div class="dosha-badge primary">
+        <span class="db-pct" id="primary-pct">—%</span>
+        <span class="db-name" id="primary-name">—</span>
+        <span class="db-role">Dominant</span>
+      </div>
+      <div class="dosha-badge secondary">
+        <span class="db-pct" id="secondary-pct">—%</span>
+        <span class="db-name" id="secondary-name">—</span>
+        <span class="db-role">Secondary</span>
+      </div>
+      <div class="dosha-badge tertiary">
+        <span class="db-pct" id="tertiary-pct">—%</span>
+        <span class="db-name" id="tertiary-name">—</span>
+        <span class="db-role">Tertiary</span>
+      </div>
+      <div class="dh-info">
+        <h2 id="constitution-label">Your Tridoshic Constitution</h2>
+        <p id="constitution-sub">Loading your program...</p>
+      </div>
+      <div class="dh-progress">
+        <div class="prog-label">Program Progress <span id="prog-pct-label">0%</span></div>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <div class="prog-days">Day <strong id="current-day">1</strong> of <strong>35</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main-content">
+
+    <!-- Quick stats -->
+    <div class="quick-stats">
+      <div class="stat-card">
+        <span class="sv" id="stat-streak">—</span>
+        <span class="sl">Day Streak</span>
+      </div>
+      <div class="stat-card">
+        <span class="sv" id="stat-tasks">—%</span>
+        <span class="sl">Tasks Today</span>
+      </div>
+      <div class="stat-card">
+        <span class="sv" id="stat-journal">—</span>
+        <span class="sl">Journal Entries</span>
+      </div>
+      <div class="stat-card">
+        <span class="sv" id="stat-phase">—</span>
+        <span class="sl">Current Phase</span>
+      </div>
+    </div>
+
+    <!-- Launch program -->
+    <div class="launch-program">
+      <div class="lp-text">
+        <h3>Continue Your 35-Day Program</h3>
+        <p>Your personalised protocol is ready — day-by-day rituals, meals, herbs, skin routines, and fitness. All your progress is saved.</p>
+      </div>
+      <button class="launch-btn" onclick="openProgram()">
+        Open Program →
+      </button>
+    </div>
+
+    <!-- Program notice about sync -->
+    <div class="program-notice">
+      <div class="pn-icon">🔄</div>
+      <div class="pn-text">
+        <h4>Auto-Sync Enabled</h4>
+        <p>Every checkbox you tick, meal you complete, and journal entry you write is automatically saved to your account. Sign in from any device and your exact progress will be there. Photos and workout screenshots are stored in your private cloud vault.</p>
+      </div>
+    </div>
+
+    <!-- Recent activity -->
+    <div class="section-label">Recent Activity</div>
+    <div class="activity-list" id="activity-list">
+      <div class="activity-item">
+        <div class="ai-icon">🌿</div>
+        <div class="ai-text"><strong>Program started</strong><span>Welcome to your practice. Your roots are planted.</span></div>
+        <div class="ai-date" id="start-date">—</div>
+      </div>
+    </div>
+
+    <!-- Action cards -->
+    <div class="action-cards">
+      <a class="action-card" href="/index.html">
+        <h4>Retake the Assessment</h4>
+        <p>Doshas shift with seasons, stress, and life. Retake the quiz periodically to recalibrate your program to your current state.</p>
+      </a>
+      <a class="action-card" href="mailto:?subject=My OJAS Program" id="share-card">
+        <h4>Share Your Constitution</h4>
+        <p>Share your tridoshic breakdown with a practitioner, health coach, or curious friend exploring Ayurveda.</p>
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// CONFIGURATION — Replace with your actual Supabase values
+// ══════════════════════════════════════════════════════════════
+var SUPABASE_URL = 'https://kxucvbysrfclcbojemti.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4dWN2YnlzcmZjbGNib2plbXRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5Mzk2MDgsImV4cCI6MjA5NjUxNTYwOH0.bYp1UfjE_gxeCULdaqTgbhjlxEDMC2eX9WwXXxC0yGU';
+var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+var currentUser = null;
+var autoSaveTimer = null;
+
+// ══════════════════════════════════════════════════════════════
+// AUTH CHECK — runs immediately on page load
+// ══════════════════════════════════════════════════════════════
+window.addEventListener('load', async function() {
+  try {
+    var session = await supabaseClient.auth.getSession();
+
+    if (!session.data.session) {
+      // Not logged in — redirect to login
+      window.location.href = '/login.html';
+      return;
+    }
+
+    currentUser = session.data.session.user;
+
+    // Load their profile and program data
+    await loadDashboard(currentUser);
+
+    // Show dashboard, hide auth gate
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('dashboard-content').style.display = 'block';
+
+    // Set up auto-save: watch localStorage for changes and sync to Supabase
+    setupAutoSync();
+
+  } catch(e) {
+    // On any error, redirect to login
+    window.location.href = '/login.html';
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// LOAD DASHBOARD DATA
+// ══════════════════════════════════════════════════════════════
+async function loadDashboard(user) {
+  // Load user name
+  var name = user.user_metadata && user.user_metadata.first_name
+    ? user.user_metadata.first_name
+    : user.email.split('@')[0];
+  document.getElementById('user-name').textContent = name;
+
+  // Load profile from Supabase
+  try {
+    var profile = await supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profile.data) {
+      var p = profile.data;
+      var doshaNames = {p:'Pitta', k:'Kapha', v:'Vata'};
+
+      // Constitution display
+      document.getElementById('primary-pct').textContent = (p.pitta_pct || '—') + '%';
+      document.getElementById('secondary-pct').textContent = (p.kapha_pct || '—') + '%';
+      document.getElementById('tertiary-pct').textContent = (p.vata_pct || '—') + '%';
+      document.getElementById('primary-name').textContent = doshaNames[p.dosha_primary] || '—';
+      document.getElementById('secondary-name').textContent = doshaNames[p.dosha_secondary] || '—';
+      document.getElementById('tertiary-name').textContent = doshaNames[p.dosha_tertiary] || '—';
+
+      if (p.dosha_primary && p.dosha_secondary && p.dosha_tertiary) {
+        document.getElementById('constitution-label').textContent =
+          doshaNames[p.dosha_primary] + '-' + doshaNames[p.dosha_secondary] + '-' + doshaNames[p.dosha_tertiary];
+        document.getElementById('constitution-sub').textContent =
+          'Your tridoshic blueprint. ' + doshaNames[p.dosha_primary] + ' dominant at ' +
+          p.pitta_pct + '%. Program syncing to your account in real-time.';
+      }
+
+      // Current day
+      var currentDay = p.current_day || 1;
+      document.getElementById('current-day').textContent = currentDay;
+      document.getElementById('prog-pct-label').textContent = Math.round((currentDay/35)*100) + '%';
+      document.getElementById('prog-fill').style.width = Math.round((currentDay/35)*100) + '%';
+
+      // Phase
+      var phase = currentDay <= 7 ? 1 : currentDay <= 14 ? 2 : currentDay <= 21 ? 3 : currentDay <= 28 ? 4 : 5;
+      document.getElementById('stat-phase').textContent = phase;
+
+      // Start date
+      if (p.program_start_date) {
+        var d = new Date(p.program_start_date);
+        document.getElementById('start-date').textContent =
+          d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      }
+
+      // Also restore their saved quiz results to localStorage
+      // (so the OJAS platform file can pick them up)
+      if (p.quiz_answers) {
+        localStorage.setItem('ojas_quiz_results', JSON.stringify({
+          primary: p.dosha_primary,
+          secondary: p.dosha_secondary,
+          tertiary: p.dosha_tertiary,
+          pct: {p: p.pitta_pct, k: p.kapha_pct, v: p.vata_pct},
+          answers: p.quiz_answers,
+          intents: p.intent_selections
+        }));
+      }
+    } else {
+      // No profile yet — they need to take the quiz
+      document.getElementById('constitution-sub').textContent =
+        'Take the assessment to build your personalised program.';
+    }
+  } catch(e) {
+    console.log('Profile load error:', e);
+  }
+
+  // Load progress stats
+  try {
+    var progress = await supabaseClient
+      .from('daily_progress')
+      .select('program_day, checkboxes, journal_entries')
+      .eq('user_id', user.id);
+
+    if (progress.data && progress.data.length > 0) {
+      var journalCount = 0;
+      progress.data.forEach(function(d) {
+        if (d.journal_entries) {
+          journalCount += Object.keys(d.journal_entries).length;
+        }
+      });
+      document.getElementById('stat-journal').textContent = journalCount;
+
+      // Calculate streak
+      var streak = calculateStreak(progress.data);
+      document.getElementById('stat-streak').textContent = streak + 'd';
+    } else {
+      document.getElementById('stat-journal').textContent = '0';
+      document.getElementById('stat-streak').textContent = '0d';
+    }
+  } catch(e) {
+    document.getElementById('stat-journal').textContent = '—';
+    document.getElementById('stat-streak').textContent = '—';
+  }
+
+  // Today's task completion from localStorage
+  var state = JSON.parse(localStorage.getItem('tridoshic_v4') || '{}');
+  var checkedToday = Object.values(state).filter(function(v){return v===true;}).length;
+  document.getElementById('stat-tasks').textContent = checkedToday > 0 ? checkedToday + ' done' : '0';
+}
+
+function calculateStreak(progressData) {
+  if (!progressData || progressData.length === 0) return 0;
+  var days = progressData.map(function(d){ return d.program_day; }).sort(function(a,b){return b-a;});
+  var streak = 1;
+  for (var i = 1; i < days.length; i++) {
+    if (days[i-1] - days[i] === 1) streak++;
+    else break;
+  }
+  return streak;
+}
+
+// ══════════════════════════════════════════════════════════════
+// AUTO-SYNC: Watch localStorage and push to Supabase
+// This bridges the existing v4 program (which uses localStorage)
+// with Supabase cloud storage
+// ══════════════════════════════════════════════════════════════
+function setupAutoSync() {
+  // Override localStorage setItem to detect changes
+  var originalSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(key, value) {
+    originalSetItem(key, value);
+    if (key === 'tridoshic_v4') {
+      scheduleSyncToSupabase(value);
+    }
+  };
+
+  // Also run initial sync check
+  var existing = localStorage.getItem('tridoshic_v4');
+  if (existing) {
+    scheduleSyncToSupabase(existing);
+  }
+}
+
+function scheduleSyncToSupabase(stateJson) {
+  // Debounce — wait 3 seconds after last change before syncing
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(function() {
+    syncToSupabase(stateJson);
+  }, 3000);
+}
+
+async function syncToSupabase(stateJson) {
+  if (!currentUser) return;
+  showSyncIndicator();
+
+  try {
+    var state = JSON.parse(stateJson || '{}');
+
+    // Group checkboxes by phase/day
+    var byDay = {};
+    Object.keys(state).forEach(function(key) {
+      // Key format: p1-1-m1, p2-8-tr, etc.
+      var match = key.match(/^(p\d)-(\d+)/);
+      if (match) {
+        var phase = match[1];
+        var day = match[2];
+        var dayKey = phase + '-' + day;
+        if (!byDay[dayKey]) byDay[dayKey] = {phase: parseInt(phase[1]), day: parseInt(day), checks: {}};
+        byDay[dayKey].checks[key] = state[key];
+      }
+    });
+
+    // Sync each day's data
+    var dayEntries = Object.values(byDay);
+    for (var i = 0; i < dayEntries.length; i++) {
+      var entry = dayEntries[i];
+      var hasChecked = Object.values(entry.checks).some(function(v){return v===true;});
+      if (hasChecked) {
+        await supabaseClient.from('daily_progress').upsert({
+          user_id: currentUser.id,
+          program_day: entry.day,
+          phase: entry.phase,
+          checkboxes: entry.checks,
+          updated_at: new Date().toISOString()
+        }, {onConflict: 'user_id,program_day'});
+      }
+    }
+
+    // Update current day in profile
+    var allDays = Object.values(byDay).filter(function(d){
+      return Object.values(d.checks).some(function(v){return v===true;});
+    }).map(function(d){return d.day;});
+
+    if (allDays.length > 0) {
+      var maxDay = Math.max.apply(null, allDays);
+      await supabaseClient.from('profiles')
+        .update({current_day: maxDay, updated_at: new Date().toISOString()})
+        .eq('id', currentUser.id);
+    }
+
+    hideSyncIndicator();
+  } catch(e) {
+    hideSyncIndicator();
+    console.log('Sync error:', e);
+  }
+}
+
+function showSyncIndicator() {
+  document.getElementById('sync-indicator').classList.add('show');
+}
+function hideSyncIndicator() {
+  setTimeout(function(){
+    document.getElementById('sync-indicator').classList.remove('show');
+  }, 1500);
+}
+
+// ══════════════════════════════════════════════════════════════
+// OPEN PROGRAM (the existing OJAS platform file)
+// ══════════════════════════════════════════════════════════════
+function openProgram() {
+  // Navigate to the OJAS platform (rename ojas-platform.html to ojas-program.html)
+  window.location.href = '/ojas-program.html';
+}
+
+// ══════════════════════════════════════════════════════════════
+// SIGN OUT
+// ══════════════════════════════════════════════════════════════
+async function signOut() {
+  await supabaseClient.auth.signOut();
+  // Clear sensitive data but keep program state
+  localStorage.removeItem('ojas_user_id');
+  localStorage.removeItem('ojas_user_profile');
+  window.location.href = '/login.html';
+}
+</script>
+</body>
+</html>
