@@ -417,6 +417,26 @@ body{background:radial-gradient(ellipse 100% 100% at 50% 0%,#0A1A0E 0%,#060D08 6
 .opt.selected-k .opt-dot{background:var(--bloom) !important;border-color:var(--bloom) !important;}
 .opt.selected-v .opt-dot{background:var(--cool) !important;border-color:var(--cool) !important;}
 
+/* Generic selection state for non-dosha questions (Q49, Q50) */
+.opt.selected-beginner,.opt.selected-intermediate,.opt.selected-advanced,
+.opt.selected-prevent,.opt.selected-heal,.opt.selected-optimise,.opt.selected-transform{
+  background:rgba(75,191,133,.1) !important;
+  border-color:var(--bloom) !important;
+  box-shadow:0 0 15px rgba(75,191,133,.12);
+}
+.opt.selected-beginner .opt-dot,.opt.selected-intermediate .opt-dot,.opt.selected-advanced .opt-dot,
+.opt.selected-prevent .opt-dot,.opt.selected-heal .opt-dot,.opt.selected-optimise .opt-dot,.opt.selected-transform .opt-dot{
+  background:var(--bloom) !important;border-color:var(--bloom) !important;
+}
+.opt.selected-beginner .opt-dot::after,.opt.selected-intermediate .opt-dot::after,.opt.selected-advanced .opt-dot::after,
+.opt.selected-prevent .opt-dot::after,.opt.selected-heal .opt-dot::after,.opt.selected-optimise .opt-dot::after,.opt.selected-transform .opt-dot::after{
+  opacity:1;
+}
+.opt.selected-beginner .opt-text,.opt.selected-intermediate .opt-text,.opt.selected-advanced .opt-text,
+.opt.selected-prevent .opt-text,.opt.selected-heal .opt-text,.opt.selected-optimise .opt-text,.opt.selected-transform .opt-text{
+  color:var(--cream) !important;
+}
+
 /* Intent cards — seed pods */
 .intent-card{
   background:rgba(10,26,14,.6) !important;
@@ -1546,6 +1566,212 @@ function toggleIntent(el) {
     el.classList.add('selected');
     if (intents.indexOf(intent) === -1) intents.push(intent);
   }
+  renderFollowups();
+}
+
+// ══════════════════════════════════════════════════════════════
+// FOLLOW-UP QUESTIONS — one per intent area, captures specific goals
+// Stored in goalProfile{} and saved to Supabase profiles.goal_profile
+// Editable later from the dashboard "Goals & Focus" section
+// ══════════════════════════════════════════════════════════════
+var goalProfile = {};
+
+var followupData = {
+  nutrition: {
+    icon: '🍽️', label: 'Nutrition & Meals',
+    question: 'What\'s your biggest challenge or goal with food right now?',
+    options: [
+      {val:'structure', text:'I need structure — meal timing, what to eat when, removing decision fatigue'},
+      {val:'weight', text:'Weight management — gaining, losing, or recomposition aligned with my dosha'},
+      {val:'digestive', text:'Digestive symptoms — bloating, irregularity, food sensitivities I want to address'},
+      {val:'energy', text:'Sustained energy — avoiding crashes, eating for stable focus throughout the day'},
+      {val:'restriction', text:'Working within restrictions — allergies, intolerances, or an existing diet (vegan, gluten-free, etc.)'}
+    ],
+    note: 'This shapes your meal plan emphasis — for example, a digestive focus prioritises CCF tea and Agni-building foods, while energy focus prioritises protein timing and blood sugar stability.'
+  },
+  fitness: {
+    icon: '💪', label: 'Fitness & Movement',
+    question: 'What does your current relationship with exercise look like?',
+    options: [
+      {val:'beginner', text:'Starting fresh — I want simple, sustainable movement without overwhelm'},
+      {val:'rebuilding', text:'Rebuilding — returning after injury, illness, or a long break'},
+      {val:'optimising', text:'Optimising — I train regularly and want to refine my split and recovery for my dosha'},
+      {val:'recomp', text:'Body composition focus — building muscle, losing fat, or both'},
+      {val:'mobility', text:'Mobility & longevity — less about performance, more about moving well for life'}
+    ],
+    note: 'This determines whether your fitness section emphasises gentle consistency, structured progression, or performance optimisation.'
+  },
+  skin: {
+    icon: '✨', label: 'Skin Health',
+    question: 'What\'s the primary skin concern you want this program to address?',
+    options: [
+      {val:'acne', text:'Active breakouts — face, back, or body acne I want to clear'},
+      {val:'aging', text:'Aging & texture — fine lines, elasticity, dullness, evening out texture'},
+      {val:'pigmentation', text:'Pigmentation & scarring — dark spots, post-acne marks, uneven tone'},
+      {val:'sensitivity', text:'Sensitivity & redness — reactive skin, rosacea-type flares, irritation'},
+      {val:'maintenance', text:'Maintenance — my skin is generally fine, I want a simple dosha-aligned routine'}
+    ],
+    note: 'Your skin protocol will lead with whichever concern you select — for example active acne shifts product recommendations toward antibacterial and anti-inflammatory ingredients first.'
+  },
+  hair: {
+    icon: '💆', label: 'Hair Care',
+    question: 'What\'s your main hair or scalp concern?',
+    options: [
+      {val:'loss', text:'Hair loss or thinning — including specific areas or patterns I\'m concerned about'},
+      {val:'texture', text:'Texture & frizz — managing dryness, frizz, or damage'},
+      {val:'scalp', text:'Scalp health — dandruff, oiliness, sensitivity, or buildup'},
+      {val:'growth', text:'Growth & length — supporting healthy growth and reducing breakage'},
+      {val:'maintenance', text:'General maintenance — my hair is healthy, I want a simple dosha-aligned routine'}
+    ],
+    note: 'A hair loss focus will lead with scalp treatment protocols and timeline expectations; texture focus leads with oils and wash frequency adjustments.'
+  },
+  supplements: {
+    icon: '🌿', label: 'Herbs & Supplements',
+    question: 'How do you want to approach herbs and supplements?',
+    options: [
+      {val:'minimal', text:'Minimal & foundational — just the core 2-3 things that matter most for my dosha'},
+      {val:'comprehensive', text:'Comprehensive stack — I want a full daily protocol with timing and rationale'},
+      {val:'specific', text:'Targeting something specific — a condition, symptom, or goal I want herbs to support'},
+      {val:'caution', text:'Cautious — I\'m currently on medication or have sensitivities, keep recommendations conservative'},
+      {val:'existing', text:'I already take supplements — help me evaluate and refine what I\'m using'}
+    ],
+    note: 'A cautious or medicated selection ensures ZenZo flags potential herb-drug interaction considerations and recommends consulting your physician before adding anything new.'
+  },
+  sleep: {
+    icon: '🌙', label: 'Sleep & Recovery',
+    question: 'What\'s your biggest sleep challenge?',
+    options: [
+      {val:'falling', text:'Falling asleep — my mind races or I feel wired at bedtime'},
+      {val:'staying', text:'Staying asleep — I wake during the night and struggle to return to sleep'},
+      {val:'waking', text:'Waking unrefreshed — I sleep enough hours but don\'t feel rested'},
+      {val:'schedule', text:'Inconsistent schedule — my bedtime varies a lot and I want more rhythm'},
+      {val:'optimising', text:'Generally fine — I want to optimise an already-decent sleep routine further'}
+    ],
+    note: 'Falling-asleep issues lead with evening Pitta-cooling and nervous system practices; staying-asleep issues lead with Vata-grounding and blood-sugar-stable dinners.'
+  },
+  stress: {
+    icon: '🧘', label: 'Stress & Mind',
+    question: 'What would be most valuable for your mental and emotional wellbeing right now?',
+    options: [
+      {val:'anxiety', text:'Managing anxiety or racing thoughts — calming an overactive mind'},
+      {val:'anger', text:'Managing frustration or irritability — cooling reactive responses'},
+      {val:'motivation', text:'Building motivation — overcoming inertia, procrastination, or low drive'},
+      {val:'focus', text:'Improving focus & clarity — reducing mental fog or scatter'},
+      {val:'practice', text:'Building a consistent practice — meditation or breathwork I can actually stick to'}
+    ],
+    note: 'This determines which meditation and pranayama techniques are emphasised first — cooling practices for anxiety/anger, activating practices for motivation, grounding practices for focus.'
+  },
+  digestion: {
+    icon: '🔥', label: 'Digestion & Gut',
+    question: 'What digestive pattern do you experience most often?',
+    options: [
+      {val:'irregular', text:'Irregularity — unpredictable bowel movements, gas, bloating'},
+      {val:'acidity', text:'Acidity & heat — heartburn, reflux, sensitivity to spicy or acidic foods'},
+      {val:'sluggish', text:'Sluggishness — heaviness after eating, slow digestion, low appetite'},
+      {val:'sensitivity', text:'Food sensitivities — specific foods consistently cause issues'},
+      {val:'cleanse', text:'I want a structured reset — interested in a guided cleanse protocol'}
+    ],
+    note: 'Your digestion section leads with the matching Agni-balancing protocol — Vishama (irregular), Tikshna (acidity), or Manda (sluggish) Agni guidance.'
+  },
+  oral: {
+    icon: '😁', label: 'Oral Health',
+    question: 'What\'s your primary oral health focus?',
+    options: [
+      {val:'gums', text:'Gum health — sensitivity, bleeding, recession, or gingivitis concerns'},
+      {val:'routine', text:'Building a routine — I want to start oil pulling, tongue scraping, etc. from scratch'},
+      {val:'breath', text:'Breath & oral microbiome — addressing chronic bad breath or oral bacteria balance'},
+      {val:'whitening', text:'Whitening & aesthetics — natural approaches to a brighter smile'},
+      {val:'maintenance', text:'Maintenance — my oral health is good, I want the dosha-aligned daily ritual'}
+    ],
+    note: 'Gum-focused selections lead with Pitta-specific anti-inflammatory protocols (like Parodontax-based routines); routine-building selections get a gentler, staged introduction.'
+  },
+  energy: {
+    icon: '⚡', label: 'Energy & Vitality',
+    question: 'How would you describe your energy challenges?',
+    options: [
+      {val:'crashes', text:'Crashes — I have energy then hit a wall, especially afternoon'},
+      {val:'morning', text:'Morning sluggishness — hard to get going, low motivation early in the day'},
+      {val:'burnout', text:'Burnout risk — I push hard and worry about sustainability'},
+      {val:'chronic', text:'Chronic fatigue — persistent low energy regardless of sleep or diet'},
+      {val:'performance', text:'Performance — I feel good but want to optimise for peak output'}
+    ],
+    note: 'Chronic fatigue responses include a note recommending bloodwork with a physician to rule out underlying causes before herbal intervention — Ojas-building practices support but don\'t replace medical evaluation.'
+  },
+  relationships: {
+    icon: '🤝', label: 'Relationships & Work',
+    question: 'Where would understanding your dosha be most useful in your relationships or work?',
+    options: [
+      {val:'conflict', text:'Conflict patterns — understanding how I react under tension and with whom'},
+      {val:'communication', text:'Communication style — adapting how I express myself with different people'},
+      {val:'boundaries', text:'Boundaries — I tend to overcommit, overgive, or struggle to say no'},
+      {val:'career', text:'Career alignment — understanding what work environments suit my constitution'},
+      {val:'general', text:'General self-understanding — curious how this applies, no specific issue'}
+    ],
+    note: 'This is reflective and educational content — it helps you understand patterns, not therapy or relationship counselling, which should come from a qualified professional if needed.'
+  },
+  cleanse: {
+    icon: '🫧', label: 'Cleanse & Detox',
+    question: 'What\'s your experience level with cleansing or detox practices?',
+    options: [
+      {val:'new', text:'New to this — I\'ve never done a structured cleanse and want to understand what\'s involved'},
+      {val:'seasonal', text:'Interested in seasonal rhythm — aligning with the Ayurvedic calendar a few times a year'},
+      {val:'reset', text:'I want a specific reset — feeling sluggish/toxic and want a clear protocol now'},
+      {val:'maintenance', text:'Light daily practices — simple ongoing habits rather than an intensive cleanse'},
+      {val:'medical', text:'I have a health condition — want gentle guidance with medical awareness built in'}
+    ],
+    note: 'The medical-aware option ensures any cleanse guidance includes a clear note to consult your doctor first, particularly around fasting or purgation practices — these can interact with medications and certain conditions.'
+  }
+};
+
+function renderFollowups() {
+  var container = document.getElementById('intent-followups');
+  var cardsEl = document.getElementById('followup-cards');
+  if (!container || !cardsEl) return;
+
+  if (intents.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+
+  var html = '';
+  intents.forEach(function(intentKey) {
+    var fu = followupData[intentKey];
+    if (!fu) return;
+    var selected = goalProfile[intentKey];
+    html += '<div class="q-card" style="border-color:rgba(75,191,133,.18);' + (selected ? 'border-color:rgba(75,191,133,.3);' : '') + '">';
+    html += '<div class="q-num" style="display:flex;align-items:center;gap:8px;">' +
+            '<span style="font-size:1rem;">' + fu.icon + '</span> ' + fu.label.toUpperCase() + '</div>';
+    html += '<div class="q-text">' + fu.question + '</div>';
+    html += '<div class="options">';
+    fu.options.forEach(function(opt, i) {
+      var labels = ['A','B','C','D','E'];
+      var isSelected = selected === opt.val;
+      html += '<button class="opt' + (isSelected ? ' selected-beginner' : '') + '" ' +
+              'data-goal="' + intentKey + '" data-val="' + opt.val + '" onclick="selectGoalOpt(this)">';
+      html += '<div class="opt-dot"></div><span class="opt-label">' + labels[i] + '</span>';
+      html += '<span class="opt-text">' + opt.text + '</span>';
+      html += '</button>';
+    });
+    html += '</div>';
+    html += '<div class="q-hint" style="margin-top:10px;margin-bottom:0;">' + fu.note + '</div>';
+    html += '</div>';
+  });
+
+  cardsEl.innerHTML = html;
+}
+
+function selectGoalOpt(el) {
+  var key = el.dataset.goal;
+  var val = el.dataset.val;
+  goalProfile[key] = val;
+
+  // Update visual state for this question group only
+  var parent = el.closest('.options');
+  parent.querySelectorAll('.opt').forEach(function(o) {
+    o.classList.remove('selected-beginner');
+  });
+  el.classList.add('selected-beginner');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2452,6 +2678,7 @@ async function saveQuizToSupabase(userId) {
       vata_pct: pct.v,
       quiz_answers: answers,
       intent_selections: intents,
+      goal_profile: goalProfile,
       program_start_date: new Date().toISOString().split('T')[0],
       current_day: 1
     });
@@ -2459,7 +2686,7 @@ async function saveQuizToSupabase(userId) {
     // Also cache locally
     localStorage.setItem('ojas_quiz_results', JSON.stringify({
       primary: ranked[0].d, secondary: ranked[1].d, tertiary: ranked[2].d,
-      pct: pct, answers: answers, intents: intents
+      pct: pct, answers: answers, intents: intents, goalProfile: goalProfile
     }));
   } catch(e) {
     console.log('Supabase save error:', e);
